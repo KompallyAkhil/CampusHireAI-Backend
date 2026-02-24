@@ -115,8 +115,10 @@ async def signup(request: Request):
         if not body.get("email") or not body.get("password") or not body.get("role") or not body.get("name"):
             raise HTTPException(status_code=400, detail="Missing required fields")
 
+        email = body.get("email").strip().lower()
+
         # Check if email already exists
-        existing = supabase.table("users").select("id").eq("email", body["email"]).execute()
+        existing = supabase.table("users").select("id").eq("email", email).execute()
         if existing.data:
             raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -125,25 +127,26 @@ async def signup(request: Request):
 
         supabase.table("users").insert({
             "id": user_id,
-            "email": body["email"],
+            "email": email,
             "name": body["name"],
             "role": body["role"],
             "password": hashed_pw,           # stored as bcrypt hash
         }).execute()
 
-        token = create_jwt(user_id, body["email"], body["role"])
+        token = create_jwt(user_id, email, body["role"])
 
         return {
             "message": "Signup successful",
             "userId": user_id,
             "token": token,                  # JWT returned on signup
+            "expires_in": JWT_EXPIRY_HOURS * 3600,
         }
 
     except HTTPException:
         raise
     except Exception as e:
         print("Signup error:", e)
-        raise HTTPException(status_code=400, detail="Signup failed")
+        raise HTTPException(status_code=500, detail=f"Signup failed: {str(e)}")
 
 
 @app.post("/signin")
@@ -154,21 +157,25 @@ async def signin(request: Request):
         if not body.get("email") or not body.get("password"):
             raise HTTPException(status_code=400, detail="Missing credentials")
 
+        email = body.get("email").strip().lower()
+
         result = (
             supabase
             .table("users")
             .select("id, name, role, email, password")
-            .eq("email", body["email"])
-            .single()
+            .eq("email", email)
             .execute()
         )
-
+        print(f"SignIn attempt for: {email}")
+        
         if not result.data:
+            print(f"SignIn failed: User {email} not found")
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
-        user = result.data
+        user = result.data[0]
 
         if not verify_password(body["password"], user["password"]):   # bcrypt verify
+            print(f"SignIn failed: Password mismatch for user {email}")
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
         token = create_jwt(user["id"], user["email"], user["role"])
@@ -176,6 +183,7 @@ async def signin(request: Request):
         return {
             "message": "SignIn successful",
             "token": token,                  # JWT returned on signin
+            "expires_in": JWT_EXPIRY_HOURS * 3600,
             "user": {
                 "id": user["id"],
                 "email": user["email"],
@@ -188,4 +196,4 @@ async def signin(request: Request):
         raise
     except Exception as e:
         print("Signin error:", e)
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=500, detail=f"Signin error: {str(e)}")
