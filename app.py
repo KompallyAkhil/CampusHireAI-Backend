@@ -17,6 +17,7 @@ JWT_SECRET: str = os.environ.get("JWT_SECRET", "your-secret-key-change-in-produc
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
 
+
 supabase: Client = create_client(url, key)
 
 app = FastAPI()
@@ -133,13 +134,9 @@ async def signup(request: Request):
             "password": hashed_pw,           # stored as bcrypt hash
         }).execute()
 
-        token = create_jwt(user_id, email, body["role"])
-
         return {
             "message": "Signup successful",
-            "userId": user_id,
-            "token": token,                  # JWT returned on signup
-            "expires_in": JWT_EXPIRY_HOURS * 3600,
+            "userId": user_id,           
         }
 
     except HTTPException:
@@ -166,7 +163,7 @@ async def signin(request: Request):
             .eq("email", email)
             .execute()
         )
-        print(f"SignIn attempt for: {email}")
+        # print(f"SignIn attempt for: {email}")
         
         if not result.data:
             print(f"SignIn failed: User {email} not found")
@@ -183,7 +180,7 @@ async def signin(request: Request):
         return {
             "message": "SignIn successful",
             "token": token,                  # JWT returned on signin
-            "expires_in": JWT_EXPIRY_HOURS * 3600,
+            "expires_in": JWT_EXPIRY_HOURS,
             "user": {
                 "id": user["id"],
                 "email": user["email"],
